@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>HL Steel Dashboard - Smooth Refresh + Scaled View (Stable)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      display: flex; height: 100vh; width: 100vw;
+      background-color: #000; overflow: hidden;
+      position: relative; font-family: Arial, sans-serif;
+    }
+    .left { flex: 25; height: 100%; border-right: 3px solid #222; position: relative; overflow: hidden; }
+    .right { flex: 75; display: flex; flex-direction: column; height: 100%; }
+    .top, .bottom { position: relative; overflow: hidden; }
+    .top { flex: 30; border-bottom: 3px solid #222; }
+    .bottom { flex: 70; }
+    .frame-wrapper { width: 100%; height: 100%; overflow: hidden; position: relative; }
+    iframe {
+      width: 100%; height: 100%; border: none;
+      transform-origin: top left; position: absolute; top: 0; left: 0;
+      opacity: 0; transition: opacity 0.8s ease-in-out;
+    }
+    iframe.visible { opacity: 1; pointer-events: auto; z-index: 2; }
+    iframe.hidden { opacity: 0; pointer-events: none; z-index: 1; }
+    .overlay {
+      position: absolute; top: 10px; left: 10px;
+      color: #00ffcc; background: rgba(0,0,0,0.4);
+      padding: 6px 10px; border-radius: 6px; font-size: 15px;
+      font-weight: bold; z-index: 10; white-space: nowrap;
+    }
+
+    /* ✅ 新增：右下 iframe 缩放 */
+    #frame-bottom-a, #frame-bottom-b {
+      transform: scale(0.7); /* 可根据实际电视显示调整比例 */
+      width: calc(100% / 0.7);
+      height: calc(100% / 0.7);
+    }
+  </style>
+</head>
+<body>
+  <div class="left">
+    <div class="frame-wrapper" id="wrapper-left">
+      <iframe id="frame-left-a" class="visible" src="https://hl-steel-industries-sdn-bhd.github.io/Ranking-Sample-3/"></iframe>
+      <iframe id="frame-left-b" class="hidden"></iframe>
+      <div id="overlay-left" class="overlay">载入中...</div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="top">
+      <div class="frame-wrapper" id="wrapper-top">
+        <iframe id="frame-top-a" class="visible" src="https://hl-steel-industries-sdn-bhd.github.io/Ranking-Sample/"></iframe>
+        <iframe id="frame-top-b" class="hidden"></iframe>
+        <div id="overlay-top" class="overlay">载入中...</div>
+      </div>
+    </div>
+    <div class="bottom">
+      <div class="frame-wrapper" id="wrapper-bottom">
+        <!-- ✅ 右下 iframe 完整显示排班表 HTML -->
+        <iframe id="frame-bottom-a" class="visible" src="https://hl-steel-industries-sdn-bhd.github.io/Work-Schedule21/"></iframe>
+        <iframe id="frame-bottom-b" class="hidden"></iframe>
+        <div id="overlay-bottom" class="overlay">载入中...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const scaleSettings = { "frame-left": 0.85, "frame-top": 0.9, "frame-bottom": 0.7 };
+    const refreshIntervals = { "frame-left": 1000000, "frame-top": 1500000, "frame-bottom": 20000000 };
+    const refreshCount = { "frame-left": 0, "frame-top": 0, "frame-bottom": 0 };
+    const frameURLs = {
+      "frame-left": "https://hl-steel-industries-sdn-bhd.github.io/Ranking-Sample-3/",
+      "frame-top": "https://hl-steel-industries-sdn-bhd.github.io/Ranking-Sample/",
+      "frame-bottom": "https://hl-steel-industries-sdn-bhd.github.io/Work-Schedule21/"
+    };
+
+    // 缩放
+    function applyScaling() {
+      for (const id in scaleSettings) {
+        const scale = scaleSettings[id];
+        document.querySelectorAll(`#${id}-a, #${id}-b`).forEach(iframe => {
+          iframe.style.transform = `scale(${scale})`;
+          iframe.style.width = `${100 / scale}%`;
+          iframe.style.height = `${100 / scale}%`;
+        });
+      }
+    }
+
+    // 时间显示
+    function updateOverlay(id) {
+      const now = new Date();
+      const timeStr = now.toLocaleString('zh-CN', { hour12: false });
+      const name = id.split('-')[1];
+      document.getElementById(`overlay-${name}`).textContent =
+        `时间：${timeStr} ｜ 刷新次数：${refreshCount[id]}`;
+    }
+
+    // 加锁机制防止重叠刷新
+    const refreshing = {};
+
+    function smoothRefresh(id) {
+      if (refreshing[id]) return; // 若正在刷新则跳过
+      refreshing[id] = true;
+
+      const frameA = document.getElementById(`${id}-a`);
+      const frameB = document.getElementById(`${id}-b`);
+      const active = frameA.classList.contains("visible") ? frameA : frameB;
+      const inactive = (active === frameA) ? frameB : frameA;
+
+      inactive.onload = null;
+
+      const newSrc = frameURLs[id] + "?v=" + Date.now();
+      inactive.src = newSrc;
+
+      const thisLoadHandler = () => {
+        inactive.onload = null;
+        active.classList.replace("visible", "hidden");
+        inactive.classList.replace("hidden", "visible");
+
+        setTimeout(() => {
+          active.src = "about:blank";
+          refreshing[id] = false;
+        }, 1200);
+
+        refreshCount[id]++;
+        updateOverlay(id);
+      };
+
+      inactive.onload = thisLoadHandler;
+    }
+
+    // 初始化
+    applyScaling();
+    for (const id in refreshIntervals) {
+      updateOverlay(id);
+      setInterval(() => smoothRefresh(id), refreshIntervals[id]);
+      setInterval(() => updateOverlay(id), 1000);
+    }
+
+    // 整页每 1 小时刷新一次
+    setInterval(() => location.reload(true), 60 * 60 * 1000);
+  </script>
+</body>
+</html>
